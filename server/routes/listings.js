@@ -160,4 +160,29 @@ router.post('/:id/report', async (req, res) => {
   }
 });
 
+// @route   DELETE api/listings/:id
+// @desc    Delete a listing (Requires JWT Authentication; only owner can delete)
+router.delete('/:id', auth, async (req, res) => {
+  try {
+    const listing = await Listing.findById(req.params.id);
+
+    if (!listing) {
+      return res.status(404).json({ success: false, message: 'Listing not found' });
+    }
+
+    // Check user authorization (owner of the listing)
+    if (listing.user.toString() !== req.user.id) {
+      return res.status(401).json({ success: false, message: 'User not authorized to delete this listing' });
+    }
+
+    await Listing.findByIdAndDelete(req.params.id);
+
+    res.status(200).json({ success: true, message: 'Listing deleted successfully' });
+  } catch (error) {
+    console.error('Delete Listing Error:', error);
+    res.status(500).json({ success: false, message: 'Server database failure deleting listing' });
+  }
+});
+
 export default router;
+

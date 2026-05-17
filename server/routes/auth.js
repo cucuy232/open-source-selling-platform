@@ -148,9 +148,26 @@ router.get('/me', auth, async (req, res) => {
 // @route   POST api/auth/google
 // @desc    Secure social login or auto-registration for authenticated Google profiles
 router.post('/google', async (req, res) => {
-  const { username, email, googleId } = req.body;
+  const { username, email: bodyEmail, googleId: bodyGoogleId, token } = req.body;
 
   try {
+    let email = bodyEmail;
+    let googleId = bodyGoogleId;
+    let name = username;
+    let avatarUrl = '';
+
+    if (token) {
+      // Decode official Google ID Token (JWT) securely
+      const decoded = jwt.decode(token);
+      if (!decoded) {
+        return res.status(400).json({ success: false, message: 'Invalid Google OAuth Token' });
+      }
+      email = decoded.email;
+      googleId = decoded.sub;
+      name = decoded.name;
+      avatarUrl = decoded.picture;
+    }
+
     if (!email || !googleId) {
       return res.status(400).json({ success: false, message: 'Google authentication credentials missing' });
     }
@@ -164,7 +181,8 @@ router.post('/google', async (req, res) => {
       const hashedPassword = await bcrypt.hash(Math.random().toString(36), salt);
 
       // Enforce minimum 3 characters for auto-generated Google usernames
-      let uniqueUsername = username || email.split('@')[0];
+      let uniqueUsername = name || email.split('@')[0];
+      uniqueUsername = uniqueUsername.replace(/\s+/g, '_').toLowerCase();
       if (uniqueUsername.length < 3) {
         uniqueUsername += '_google';
       }
@@ -179,14 +197,15 @@ router.post('/google', async (req, res) => {
         username: uniqueUsername,
         email: email.toLowerCase(),
         password: hashedPassword,
-        isPremium: false
+        isPremium: false,
+        avatar: avatarUrl || `https://api.dicebear.com/7.x/pixel-art/svg?seed=${uniqueUsername}`
       });
 
       await user.save();
     }
 
     // 3. Generate secure JWT session token for the recovery session
-    const token = jwt.sign(
+    const localToken = jwt.sign(
       { id: user._id, username: user.username },
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
@@ -194,13 +213,14 @@ router.post('/google', async (req, res) => {
 
     res.status(200).json({
       success: true,
-      token,
+      token: localToken,
       user: {
         id: user._id,
         username: user.username,
         email: user.email,
         isPremium: user.isPremium,
-        location: user.location
+        location: user.location,
+        avatar: user.avatar
       }
     });
 

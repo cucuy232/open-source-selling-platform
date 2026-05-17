@@ -7,12 +7,22 @@ interface ItemDetailProps {
   activeItem: Listing;
   onBack: () => void;
   onChatClick: () => void;
-  onLike: (e: React.MouseEvent, id: number) => void;
-  onReport: (e: React.MouseEvent, id: number) => void;
+  onLike: (e: React.MouseEvent, id: any) => void;
+  onReport: (e: React.MouseEvent, id: any) => void;
   currentUser: any;
+  onDelete: (id: any) => void;
 }
 
-const ItemDetail: React.FC<ItemDetailProps> = ({ activeItem, onBack, onChatClick, onLike, onReport }) => {
+const ItemDetail: React.FC<ItemDetailProps> = ({ 
+  activeItem, 
+  onBack, 
+  onChatClick, 
+  onLike, 
+  onReport,
+  currentUser,
+  onDelete
+}) => {
+  const isOwner = currentUser && (activeItem.userId === currentUser.id);
   return (
     <div className="item-detail-view">
       <div className="chan-box">
@@ -117,6 +127,35 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ activeItem, onBack, onChatClick
               >
                 [ REPORT AD ]
               </button>
+              {isOwner && (
+                <button
+                  style={{
+                    background: '#ffebeb',
+                    color: '#d9534f',
+                    padding: '10px 20px',
+                    border: '1px dashed #d9534f',
+                    fontWeight: 'bold',
+                    fontSize: '0.9rem',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    transition: 'all 0.2s',
+                    boxShadow: '2px 2px 0px rgba(0,0,0,0.1)'
+                  }}
+                  onMouseOver={(e) => {
+                    e.currentTarget.style.background = '#d9534f';
+                    e.currentTarget.style.color = '#fff';
+                  }}
+                  onMouseOut={(e) => {
+                    e.currentTarget.style.background = '#ffebeb';
+                    e.currentTarget.style.color = '#d9534f';
+                  }}
+                  onClick={() => onDelete(activeItem.id)}
+                >
+                  [ 🗑 DELETE LISTING ]
+                </button>
+              )}
             </div>
           </div>
         </div>

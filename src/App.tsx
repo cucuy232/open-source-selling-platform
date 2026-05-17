@@ -21,6 +21,26 @@ import Toast from './components/Toast';
 import DonateModal from './components/DonateModal';
 import { AnimatePresence } from 'framer-motion';
 
+const mapDbListingToFrontend = (dbListing: any): Listing => {
+  return {
+    id: dbListing._id || Date.now(),
+    subject: dbListing.title,
+    name: dbListing.user?.username || 'Anonymous',
+    body: dbListing.description,
+    price: typeof dbListing.price === 'number'
+      ? '₹' + dbListing.price.toLocaleString('en-IN')
+      : String(dbListing.price),
+    images: dbListing.image ? [dbListing.image] : ["https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500&auto=format&fit=crop&q=60"],
+    time: new Date(dbListing.createdAt).toLocaleString(),
+    category: dbListing.category,
+    userId: dbListing.user?._id || dbListing.user,
+    location: dbListing.location,
+    coordinates: dbListing.coordinates ? [dbListing.coordinates.lat, dbListing.coordinates.lng] : undefined,
+    likes: dbListing.likes || 0,
+    createdAt: new Date(dbListing.createdAt).getTime()
+  };
+};
+
 function App() {
   const [listings, setListings] = useState<Listing[]>(INITIAL_LISTINGS);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -33,10 +53,11 @@ function App() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
-  const [likedItems, setLikedItems] = useState<number[]>([]);
+  const [likedItems, setLikedItems] = useState<(number | string)[]>([]);
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
   const [notification, setNotification] = useState<{ message: string, type: 'success' | 'info' | 'error' } | null>(null);
   const [isGoogleChooserOpen, setIsGoogleChooserOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<number | string | null>(null);
 
   const [authData, setAuthData] = useState<AuthData>({ username: '', email: '', password: '', isRobotChecked: false });
   const [promoConfig, setPromoConfig] = useState<{ itemId: number | null, days: number, reach: number }>({
@@ -87,8 +108,20 @@ function App() {
     }
   }, []);
 
-  const triggerGoogleBackendLogin = (name: string, email: string) => {
-    setIsGoogleChooserOpen(false);
+  // Fetch live listings from MongoDB Atlas on mount
+  React.useEffect(() => {
+    fetch('http://localhost:5005/api/listings')
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && data.listings && data.listings.length > 0) {
+          const mapped = data.listings.map(mapDbListingToFrontend);
+          setListings(mapped);
+        }
+      })
+      .catch(err => console.error('Failed to retrieve listings from MongoDB Atlas:', err));
+  }, []);
+
+  const handleGoogleCredentialResponse = (response: any) => {
     setIsAuthOpen(false);
     setNotification({ message: '📡 Verifying Google OAuth Token with MongoDB...', type: 'info' });
 
@@ -98,9 +131,7 @@ function App() {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        username: name,
-        email: email,
-        googleId: `google_oauth_${email.split('@')[0]}_${Date.now()}`
+        token: response.credential
       })
     })
       .then(res => res.json())
@@ -124,6 +155,22 @@ function App() {
         });
       });
   };
+
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const initGoogle = () => {
+        if (window.google?.accounts?.id) {
+          window.google.accounts.id.initialize({
+            client_id: "597058348071-d2i0qs108tm6qujeue8b6qbq8iti8epo.apps.googleusercontent.com",
+            callback: handleGoogleCredentialResponse,
+          });
+        } else {
+          setTimeout(initGoogle, 300);
+        }
+      };
+      initGoogle();
+    }
+  }, []);
 
   const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
     const R = 6371; // km
@@ -269,21 +316,85 @@ function App() {
       return;
     }
 
-    const { currency, ...restOfFormData } = formData;
-    const newListing: Listing = {
-      id: Date.now(),
-      ...restOfFormData,
-      price: currency + formData.price,
-      name: currentUser.username,
-      userId: currentUser.id,
-      time: new Date().toLocaleString() + " (Today)",
-      images: formData.images.length > 0 ? formData.images : ["https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500&auto=format&fit=crop&q=60"],
-      likes: 0,
-      createdAt: Date.now()
-    };
-    setListings([newListing, ...listings]);
-    setFormData({ subject: '', body: '', price: '', images: [], category: 'misc', currency: '₹', location: '', coordinates: undefined });
-    setIsFormOpen(false);
+    const token = localStorage.getItem('bhejiyo_token');
+    const parsedPrice = parseFloat(formData.price.replace(/[^\d.]/g, '')) || 0;
+    const lat = formData.coordinates ? formData.coordinates[0] : 28.6139;
+    const lng = formData.coordinates ? formData.coordinates[1] : 77.2090;
+
+    fetch('http://localhost:5005/api/listings', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        title: formData.subject,
+        price: parsedPrice,
+        description: formData.body,
+        category: formData.category,
+        board: 'Marketplace',
+        location: formData.location || 'Unknown Location',
+        coordinates: { lat, lng },
+        image: formData.images[0] || ''
+      })
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && data.listing) {
+          const mapped = mapDbListingToFrontend(data.listing);
+          setListings([mapped, ...listings]);
+          setFormData({ subject: '', body: '', price: '', images: [], category: 'misc', currency: '₹', location: '', coordinates: undefined });
+          setIsFormOpen(false);
+          setNotification({ message: 'Successfully published listing to MongoDB Atlas! 🚀', type: 'success' });
+        } else {
+          throw new Error(data.message || 'Failed to save listing');
+        }
+      })
+      .catch(err => {
+        console.error('Publish Listing Error:', err);
+        setNotification({ message: `Failed to post listing: ${err.message}`, type: 'error' });
+      });
+  };
+
+  const compressImage = (base64Str: string, maxWidth = 600, maxHeight = 600, quality = 0.6): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.src = base64Str;
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        // Keep aspect ratio
+        if (width > height) {
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          // Compress as JPEG with specified quality
+          const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
+          resolve(compressedBase64);
+        } else {
+          resolve(base64Str);
+        }
+      };
+      img.onerror = () => {
+        resolve(base64Str);
+      };
+    });
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -294,18 +405,28 @@ function App() {
     if (remaining <= 0) return;
 
     const filesToProcess = files.slice(0, remaining);
+    
+    setNotification({ message: '📸 Compressing images for database efficiency...', type: 'info' });
+
     const promises = filesToProcess.map(file => {
       return new Promise<string>((resolve) => {
         const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result as string);
+        reader.onloadend = () => {
+          const rawBase64 = reader.result as string;
+          compressImage(rawBase64, 600, 600, 0.6).then(compressed => {
+            resolve(compressed);
+          });
+        };
         reader.readAsDataURL(file);
       });
     });
     const results = await Promise.all(promises);
     setFormData({ ...formData, images: [...formData.images, ...results] });
+    setNotification({ message: '📸 Images compressed and loaded successfully! ⚡', type: 'success' });
   };
 
-  const handleLike = (e: React.MouseEvent, id: number) => {
+
+  const handleLike = (e: React.MouseEvent, id: number | string) => {
     e.stopPropagation();
 
     if (!currentUser) {
@@ -315,26 +436,31 @@ function App() {
       return;
     }
 
-    let newLikes = 0;
     const item = listings.find(l => l.id === id);
     if (!item) return;
 
-    if (likedItems.includes(id)) {
-      setLikedItems(likedItems.filter(itemId => itemId !== id));
-      newLikes = (item.likes || 0) - 1;
-    } else {
-      setLikedItems([...likedItems, id]);
-      newLikes = (item.likes || 0) + 1;
-    }
-
-    setListings(listings.map(l => l.id === id ? { ...l, likes: newLikes } : l));
-
-    if (activeItem && activeItem.id === id) {
-      setActiveItem({ ...activeItem, likes: newLikes });
-    }
+    fetch(`http://localhost:5005/api/listings/${id}/like`, {
+      method: 'POST'
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          if (likedItems.includes(id)) {
+            setLikedItems(likedItems.filter(itemId => itemId !== id));
+          } else {
+            setLikedItems([...likedItems, id]);
+          }
+          const updatedLikes = data.likes !== undefined ? data.likes : (item.likes || 0) + 1;
+          setListings(listings.map(l => l.id === id ? { ...l, likes: updatedLikes } : l));
+          if (activeItem && activeItem.id === id) {
+            setActiveItem({ ...activeItem, likes: updatedLikes });
+          }
+        }
+      })
+      .catch(err => console.error('Failed to update likes on backend:', err));
   };
 
-  const handleReport = (e: React.MouseEvent, id: number) => {
+  const handleReport = (e: React.MouseEvent, id: number | string) => {
     e.stopPropagation();
     e.preventDefault();
 
@@ -345,7 +471,16 @@ function App() {
       return;
     }
 
-    setNotification({ message: `Item #${id} has been reported for review. Thank you for keeping OSSP safe!`, type: 'success' });
+    fetch(`http://localhost:5005/api/listings/${id}/report`, {
+      method: 'POST'
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          setNotification({ message: `Listing has been successfully reported to the moderation panel. Thank you!`, type: 'success' });
+        }
+      })
+      .catch(err => console.error('Failed to report listing on backend:', err));
   };
 
   const handleItemClick = (item: Listing) => {
@@ -376,6 +511,45 @@ function App() {
       setCurrentUser({ ...currentUser, location: newLocation });
       setNotification({ message: 'Profile updated successfully!', type: 'success' });
     }
+  };
+
+  const handleDeleteListing = (listingId: number | string) => {
+    if (!currentUser) {
+      setAuthMode('login');
+      setIsAuthOpen(true);
+      setNotification({ message: 'Please sign in to delete listings.', type: 'info' });
+      return;
+    }
+    setItemToDelete(listingId);
+  };
+
+  const executeDelete = (listingId: number | string) => {
+    const token = localStorage.getItem('bhejiyo_token');
+    
+    setNotification({ message: '🗑️ Deleting listing from database...', type: 'info' });
+
+    fetch(`http://localhost:5005/api/listings/${listingId}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          setListings(listings.filter(l => l.id !== listingId));
+          setNotification({ message: 'Listing deleted successfully! 🗑️', type: 'success' });
+          if (activeItem && activeItem.id === listingId) {
+            setActiveItem(null);
+          }
+        } else {
+          throw new Error(data.message || 'Failed to delete listing');
+        }
+      })
+      .catch(err => {
+        console.error('Delete Listing Error:', err);
+        setNotification({ message: `Failed to delete listing: ${err.message}`, type: 'error' });
+      });
   };
 
   const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
@@ -498,6 +672,7 @@ function App() {
               ]);
             }
           }}
+          onDelete={handleDeleteListing}
         />
       );
     }
@@ -527,6 +702,7 @@ function App() {
           onBack={() => setActiveCategory('landing')}
           onItemClick={setActiveItem}
           onUpdateLocation={handleUpdateLocation}
+          onDeleteListing={handleDeleteListing}
         />
       );
     }
@@ -602,7 +778,13 @@ function App() {
           onAuth={handleAuth}
           onDataChange={setAuthData}
           onModeChange={setAuthMode}
-          onGoogleLogin={() => setIsGoogleChooserOpen(true)}
+          onGoogleLogin={() => {
+            if (window.google?.accounts?.id) {
+              window.google.accounts.id.prompt();
+            } else {
+              setNotification({ message: 'Google Client Library still loading...', type: 'error' });
+            }
+          }}
           onViewTerms={() => { setIsAuthOpen(false); setActiveCategory('terms'); }}
         />
       )}
@@ -663,61 +845,73 @@ function App() {
         )}
       </AnimatePresence>
 
-      {/* Retro Google Account Chooser Popup Modal */}
-      {isGoogleChooserOpen && (
+
+
+      {/* Retro Custom Confirmation Modal */}
+      {itemToDelete !== null && (
         <div style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
           background: 'rgba(0,0,0,0.3)', display: 'flex', alignItems: 'center',
-          justifyContent: 'center', zIndex: 1100
+          justifyContent: 'center', zIndex: 1200
         }}>
-          <div className="post-form-container" style={{ width: '330px', padding: '18px', textAlign: 'center', border: '2px solid #4285F4', borderRadius: '4px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', borderBottom: '1px solid rgba(128,0,0,0.1)', paddingBottom: '6px' }}>
-              <span style={{ fontWeight: 'bold', color: '#4285F4', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.9rem' }}>
-                <img src="https://www.gstatic.com/images/branding/product/2x/googleg_48dp.png" alt="Google" style={{ width: '16px', height: '16px' }} />
-                Google Accounts (OSSP Sandbox)
+          <div className="post-form-container" style={{ width: '350px', padding: '20px', border: '2px solid var(--border-red)', borderRadius: '4px', background: '#fff' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', borderBottom: '1px solid var(--border-red)', paddingBottom: '6px' }}>
+              <span style={{ fontWeight: 'bold', color: 'var(--text-red)', fontSize: '0.95rem', fontFamily: 'var(--font-serif)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                ⚠️ Confirm Deletion
               </span>
-              <span style={{ cursor: 'pointer', fontWeight: 'bold' }} onClick={() => setIsGoogleChooserOpen(false)}>X</span>
+              <span style={{ cursor: 'pointer', fontWeight: 'bold', fontFamily: 'monospace' }} onClick={() => setItemToDelete(null)}>X</span>
             </div>
             
-            <p style={{ fontSize: '0.78rem', color: '#555', margin: '0 0 12px 0', textAlign: 'left', lineHeight: '1.4' }}>
-              Select an account to log in to <strong>bhejiyo</strong> securely:
+            <p style={{ fontSize: '0.85rem', color: '#444', marginBottom: '20px', fontFamily: 'var(--font-serif)', lineHeight: '1.4', textAlign: 'left' }}>
+              Are you absolutely sure you want to delete this listing? This action is permanent and cannot be undone.
             </p>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {[
-                { name: 'OSSP Administrator', email: 'admin.ossp@gmail.com', avatar: 'https://api.dicebear.com/7.x/pixel-art/svg?seed=Admin' },
-                { name: 'Developer Mode', email: 'dev.bhejiyo@gmail.com', avatar: 'https://api.dicebear.com/7.x/pixel-art/svg?seed=Dev' },
-                { name: 'OSSP Tester', email: 'tester.ossp@gmail.com', avatar: 'https://api.dicebear.com/7.x/pixel-art/svg?seed=Tester' }
-              ].map((acc) => (
-                <div 
-                  key={acc.email}
-                  onClick={() => triggerGoogleBackendLogin(acc.name, acc.email)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '10px',
-                    padding: '8px',
-                    border: '1px solid #d3d3d3',
-                    background: '#fff',
-                    borderRadius: '3px',
-                    cursor: 'pointer',
-                    textAlign: 'left'
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = '#f2f2f2'; e.currentTarget.style.borderColor = '#4285F4'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#d3d3d3'; }}
-                >
-                  <img src={acc.avatar} alt="avatar" style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#f5f5f5' }} />
-                  <div>
-                    <div style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#222' }}>{acc.name}</div>
-                    <div style={{ fontSize: '0.7rem', color: '#666' }}>{acc.email}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div style={{ fontSize: '0.65rem', color: '#888', marginTop: '12px', borderTop: '1px dashed #ccc', paddingTop: '8px', lineHeight: '1.4' }}>
-              🔒 MongoDB Cloud Atlas Connected.<br />
-              Local Google developer Client ID is active.
+            
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button
+                onClick={() => setItemToDelete(null)}
+                style={{
+                  background: '#eee',
+                  color: '#333',
+                  border: '1px solid #ccc',
+                  padding: '6px 16px',
+                  fontSize: '0.85rem',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  fontFamily: 'monospace'
+                }}
+              >
+                [ CANCEL ]
+              </button>
+              <button
+                onClick={() => {
+                  if (itemToDelete !== null) {
+                    const id = itemToDelete;
+                    setItemToDelete(null);
+                    executeDelete(id);
+                  }
+                }}
+                style={{
+                  background: '#ffebeb',
+                  color: '#d9534f',
+                  border: '1px solid #d9534f',
+                  padding: '6px 16px',
+                  fontSize: '0.85rem',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  fontFamily: 'monospace',
+                  transition: 'all 0.2s'
+                }}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.background = '#d9534f';
+                  e.currentTarget.style.color = '#fff';
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.background = '#ffebeb';
+                  e.currentTarget.style.color = '#d9534f';
+                }}
+              >
+                [ YES, DELETE ]
+              </button>
             </div>
           </div>
         </div>

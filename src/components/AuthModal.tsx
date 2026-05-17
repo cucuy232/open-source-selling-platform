@@ -23,13 +23,34 @@ const AuthModal: React.FC<AuthModalProps> = ({
   onViewTerms
 }) => {
   const [agreedToTerms, setAgreedToTerms] = useState(false);
+
+  React.useEffect(() => {
+    const renderGoogleBtn = () => {
+      const btnContainer = document.getElementById("google-signin-btn");
+      if (btnContainer && window.google?.accounts?.id) {
+        window.google.accounts.id.renderButton(
+          btnContainer,
+          { 
+            theme: "outline", 
+            size: "large", 
+            text: "signin_with", 
+            shape: "rectangular",
+            width: 270
+          }
+        );
+      } else {
+        setTimeout(renderGoogleBtn, 300);
+      }
+    };
+    renderGoogleBtn();
+  }, [mode]);
   return (
     <div style={{
       position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-      background: 'rgba(0,0,0,0.1)', display: 'flex', alignItems: 'center',
+      background: 'rgba(0,0,0,0.15)', display: 'flex', alignItems: 'center',
       justifyContent: 'center', zIndex: 1000
     }}>
-      <div className="post-form-container" style={{ width: '300px', padding: '15px' }}>
+      <div className="post-form-container" style={{ width: '320px' }}>
         <div className="post-header">
           <span>{mode === 'login' ? 'Login' : 'Signup'}</span>
           <span style={{ cursor: 'pointer' }} onClick={onClose}>X</span>
@@ -108,37 +129,39 @@ const AuthModal: React.FC<AuthModalProps> = ({
             </div>
           )}
 
-          {/* Terms & Conditions / Privacy Policy Checkbox */}
-          <div style={{ 
-            background: '#fcf8f5', 
-            border: '1px dashed var(--border-red)', 
-            padding: '8px 10px', 
-            display: 'flex', 
-            alignItems: 'flex-start', 
-            gap: '8px',
-            margin: '10px 0',
-            borderRadius: '2px',
-            textAlign: 'left'
-          }}>
-            <input 
-              type="checkbox" 
-              id="terms-check" 
-              checked={agreedToTerms}
-              onChange={e => setAgreedToTerms(e.target.checked)}
-              style={{ width: '16px', height: '16px', margin: '2px 0 0 0', cursor: 'pointer' }}
-              required
-            />
-            <label htmlFor="terms-check" style={{ fontSize: '0.68rem', cursor: 'pointer', color: '#555', lineHeight: '1.4' }}>
-              I agree to the <a href="#" onClick={(e) => { e.preventDefault(); onViewTerms(); }} style={{ color: 'var(--text-red)', textDecoration: 'underline', fontWeight: 'bold' }}>Terms of Service</a> and <a href="#" onClick={(e) => { e.preventDefault(); onViewTerms(); }} style={{ color: 'var(--text-red)', textDecoration: 'underline', fontWeight: 'bold' }}>Privacy Policy</a>.
-            </label>
-          </div>
+          {/* Terms & Conditions / Privacy Policy Checkbox (Signup Only) */}
+          {mode === 'signup' && (
+            <div style={{ 
+              background: '#fcf8f5', 
+              border: '1px dashed var(--border-red)', 
+              padding: '8px 10px', 
+              display: 'flex', 
+              alignItems: 'flex-start', 
+              gap: '8px',
+              margin: '10px 0',
+              borderRadius: '2px',
+              textAlign: 'left'
+            }}>
+              <input 
+                type="checkbox" 
+                id="terms-check" 
+                checked={agreedToTerms}
+                onChange={e => setAgreedToTerms(e.target.checked)}
+                style={{ width: '16px', height: '16px', margin: '2px 0 0 0', cursor: 'pointer' }}
+                required
+              />
+              <label htmlFor="terms-check" style={{ fontSize: '0.68rem', cursor: 'pointer', color: '#555', lineHeight: '1.4' }}>
+                I agree to the <a href="#" onClick={(e) => { e.preventDefault(); onViewTerms(); }} style={{ color: 'var(--text-red)', textDecoration: 'underline', fontWeight: 'bold' }}>Terms of Service</a> and <a href="#" onClick={(e) => { e.preventDefault(); onViewTerms(); }} style={{ color: 'var(--text-red)', textDecoration: 'underline', fontWeight: 'bold' }}>Privacy Policy</a>.
+              </label>
+            </div>
+          )}
 
           <button 
             type="submit" 
-            disabled={!agreedToTerms || (mode === 'signup' && !authData.isRobotChecked)}
+            disabled={mode === 'signup' ? (!agreedToTerms || !authData.isRobotChecked) : false}
             style={{
-              cursor: (agreedToTerms && (mode === 'login' || authData.isRobotChecked)) ? 'pointer' : 'not-allowed',
-              opacity: (agreedToTerms && (mode === 'login' || authData.isRobotChecked)) ? 1 : 0.6
+              cursor: (mode === 'login' || (agreedToTerms && authData.isRobotChecked)) ? 'pointer' : 'not-allowed',
+              opacity: (mode === 'login' || (agreedToTerms && authData.isRobotChecked)) ? 1 : 0.6
             }}
           >
             {mode === 'login' ? 'Login' : 'Signup'}
@@ -149,25 +172,7 @@ const AuthModal: React.FC<AuthModalProps> = ({
             <span style={{ position: 'absolute', top: '-10px', left: '50%', transform: 'translateX(-50%)', background: 'white', padding: '0 10px', fontSize: '0.7rem', color: '#888' }}>OR</span>
           </div>
 
-          <button 
-            type="button" 
-            style={{ 
-              background: 'white', 
-              color: '#444', 
-              border: '1px solid #ccc', 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center', 
-              gap: '10px',
-              fontWeight: 'normal',
-              fontSize: '0.9rem',
-              cursor: 'pointer'
-            }}
-            onClick={onGoogleLogin}
-          >
-            <img src="https://www.gstatic.com/images/branding/product/2x/googleg_48dp.png" alt="Google" style={{ width: '18px', height: '18px' }} />
-            Sign in with Google
-          </button>
+          <div id="google-signin-btn" style={{ display: 'flex', justifyContent: 'center', marginTop: '10px' }}></div>
 
           <p style={{ fontSize: '0.8rem', marginTop: '10px', textAlign: 'center' }}>
             {mode === 'login' ? "Don't have an account? " : "Already have an account? "}

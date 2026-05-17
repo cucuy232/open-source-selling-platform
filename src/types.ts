@@ -7,7 +7,7 @@ export interface User {
 }
 
 export interface Listing {
-  id: number;
+  id: number | string;
   subject: string;
   name: string;
   body: string;

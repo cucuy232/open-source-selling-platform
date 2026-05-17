@@ -9,6 +9,7 @@ interface ProfileViewProps {
   onBack: () => void;
   onItemClick: (item: Listing) => void;
   onUpdateLocation: (location: string) => void;
+  onDeleteListing: (id: any) => void;
 }
 
 const ProfileView: React.FC<ProfileViewProps> = ({ 
@@ -17,7 +18,8 @@ const ProfileView: React.FC<ProfileViewProps> = ({
   likedListings, 
   onBack, 
   onItemClick,
-  onUpdateLocation
+  onUpdateLocation,
+  onDeleteListing
 }) => {
   return (
     <div className="profile-view">
@@ -116,16 +118,48 @@ const ProfileView: React.FC<ProfileViewProps> = ({
                     padding: '10px', 
                     borderBottom: '1px solid #eee', 
                     cursor: 'pointer',
-                    transition: 'background 0.2s'
+                    transition: 'background 0.2s',
+                    alignItems: 'center'
                   }}
                   onMouseOver={(e) => e.currentTarget.style.background = '#fdf6f2'}
                   onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}
                 >
-                  <img src={item.images[0]} alt="" style={{ width: '50px', height: '50px', objectFit: 'cover', border: '1px solid var(--border-red)' }} />
-                  <div style={{ fontFamily: 'var(--font-serif)' }}>
-                    <div style={{ fontWeight: '800', fontSize: '0.9rem', color: 'var(--text-red)', letterSpacing: '0.3px' }}>{item.subject}</div>
-                    <div style={{ fontSize: '0.8rem', color: 'var(--text-red)' }}>{item.price}</div>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--text-red)', opacity: 0.8 }}>Likes: {item.likes || 0}</div>
+                  <div style={{ display: 'flex', gap: '10px', flex: 1, alignItems: 'center' }}>
+                    <img src={item.images[0]} alt="" style={{ width: '50px', height: '50px', objectFit: 'cover', border: '1px solid var(--border-red)' }} />
+                    <div style={{ fontFamily: 'var(--font-serif)' }}>
+                      <div style={{ fontWeight: '800', fontSize: '0.9rem', color: 'var(--text-red)', letterSpacing: '0.3px' }}>{item.subject}</div>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-red)' }}>{item.price}</div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-red)', opacity: 0.8 }}>Likes: {item.likes || 0}</div>
+                    </div>
+                  </div>
+                  <div style={{ marginLeft: 'auto' }}>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDeleteListing(item.id);
+                      }}
+                      style={{
+                        background: '#ffebeb',
+                        color: '#d9534f',
+                        border: '1px dotted #d9534f',
+                        padding: '6px 12px',
+                        fontSize: '0.75rem',
+                        fontWeight: 'bold',
+                        cursor: 'pointer',
+                        fontFamily: 'monospace',
+                        transition: 'all 0.2s'
+                      }}
+                      onMouseOver={(e) => {
+                        e.currentTarget.style.background = '#d9534f';
+                        e.currentTarget.style.color = '#fff';
+                      }}
+                      onMouseOut={(e) => {
+                        e.currentTarget.style.background = '#ffebeb';
+                        e.currentTarget.style.color = '#d9534f';
+                      }}
+                    >
+                      [ 🗑 DELETE ]
+                    </button>
                   </div>
                 </div>
               ))

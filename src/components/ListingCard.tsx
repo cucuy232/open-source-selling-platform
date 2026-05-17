@@ -5,8 +5,8 @@ interface ListingCardProps {
   item: Listing;
   onClick: (item: Listing) => void;
   onEnquire: (item: Listing) => void;
-  onLike?: (e: React.MouseEvent, id: number) => void;
-  onReport?: (e: React.MouseEvent, id: number) => void;
+  onLike?: (e: React.MouseEvent, id: number | string) => void;
+  onReport?: (e: React.MouseEvent, id: number | string) => void;
 }
 
 const ListingCard: React.FC<ListingCardProps> = ({ item, onClick, onEnquire, onLike, onReport }) => {
