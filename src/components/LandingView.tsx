@@ -7,8 +7,8 @@ interface LandingViewProps {
   onCategoryChange: (cat: string) => void;
   onItemClick: (item: Listing) => void;
   onEnquire: (item: Listing) => void;
-  onLike: (e: React.MouseEvent, id: number) => void;
-  onReport: (e: React.MouseEvent, id: number) => void;
+  onLike: (e: React.MouseEvent, id: number | string) => void;
+  onReport: (e: React.MouseEvent, id: number | string) => void;
   currentUser: User | null;
   onOpenAuth: (mode: 'login' | 'signup') => void;
 }
@@ -24,7 +24,7 @@ const LandingView: React.FC<LandingViewProps> = ({ boards, listings, onCategoryC
     if (sortBy === 'likes') {
       return (b.likes || 0) - (a.likes || 0);
     }
-    return b.id - a.id;
+    return String(b.id).localeCompare(String(a.id), undefined, { numeric: true });
   });
 
   return (

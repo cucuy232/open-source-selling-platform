@@ -7,8 +7,8 @@ interface SearchViewProps {
   listings: Listing[];
   onItemClick: (item: Listing) => void;
   onEnquire: (item: Listing) => void;
-  onLike: (e: React.MouseEvent, id: number) => void;
-  onReport: (e: React.MouseEvent, id: number) => void;
+  onLike: (e: React.MouseEvent, id: number | string) => void;
+  onReport: (e: React.MouseEvent, id: number | string) => void;
 }
 
 const SearchView: React.FC<SearchViewProps> = ({
